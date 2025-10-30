@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 )
 
@@ -101,7 +100,7 @@ func (r *Request) parseRequestLine(data []byte) (int, error) {
 	if indx == -1 {
 		return 0, nil
 	}
-	log.Printf("data before parsing request line: %s", data[:indx])
+	
 	reqLine, err := requestLineParsing(data[:indx])
 		if err != nil {
 			return 0, err
@@ -112,9 +111,9 @@ func (r *Request) parseRequestLine(data []byte) (int, error) {
 }
 
 func requestLineParsing(data []byte) (*RequestLine, error) {
-	log.Printf("data: %s", data)
+	
 	httpParts := strings.Split(string(data), " ")
-	log.Printf("httpParts: %v", httpParts)
+	
 	//checking for valid no of parts
 	if len(httpParts) != 3 {
 		return nil, fmt.Errorf("invalid no of request line parts")
