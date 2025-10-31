@@ -86,6 +86,13 @@ func (h Headers) Get(key string) (string, bool) {
 	return val, true
 }
 
+
+func (h Headers) ForceSet(key, val string) {
+	key = strings.ToLower(key)
+
+	h[key] = val
+}
+
 func validateHeaderKey(key string) error {
 	for _, c := range key {
 		if !strings.ContainsAny(string(c), validKeyString) {
