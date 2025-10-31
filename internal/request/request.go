@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"www.github.com/isaac-albert/httpfromtcp/internal/headers"
@@ -18,12 +19,15 @@ type RequstState int
 const (
 	StateInit RequstState = iota
 	StateParsingHeaders
+	StateParsingBody
 	StateDone
 )
+
 type Request struct {
 	RequestLine RequestLine
-	Headers headers.Headers
-	State RequstState
+	Headers     headers.Headers
+	Body        []byte
+	State       RequstState
 }
 
 type RequestLine struct {
@@ -34,8 +38,9 @@ type RequestLine struct {
 
 func NewRequest() *Request {
 	return &Request{
-		State: StateInit,
+		State:   StateInit,
 		Headers: headers.NewHeaders(),
+		Body: []byte{},
 	}
 }
 
@@ -73,12 +78,17 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			return nil, err
 		}
 		//log.Printf("infinite loop starts here: %v", 76)
-		
+
 		copy(p, p[bytesParsed:])
 		index -= bytesParsed
 		//log.Printf("infinite loop starts here: %v", 80)
 
 	}
+	// val, _ := req.Headers.Get("content-length")
+	// valInt, _ := strconv.Atoi(val)
+	// if len(req.Body) < valInt {
+	// 	return nil, fmt.Errorf("body smaller than content-length")
+	// }
 
 	return req, nil
 }
@@ -87,15 +97,12 @@ func (r *Request) parse(data []byte) (int, error) {
 	totalBytesParsed := 0
 
 	for !r.isDone() {
-		//log.Printf("before data[totalBytesParsed:] is: %s", data[totalBytesParsed:])
-		//log.Printf("infinite loop starts here: %v", 92)
 		n, err := r.parseSingle(data[totalBytesParsed:])
 		if err != nil {
 			return 0, err
 		}
 		totalBytesParsed += n
 		if n == 0 {
-			//log.Printf("infinite loop starts here: %v", 99)
 			break
 		}
 	}
@@ -104,35 +111,64 @@ func (r *Request) parse(data []byte) (int, error) {
 
 func (r *Request) parseSingle(data []byte) (int, error) {
 	switch r.State {
-	case StateInit: 
-			reqLine, n, err := parseRequestLine(data)
-			if err != nil {
-				return 0, err
-			}
-			if n == 0 {
-				return 0, nil
-			}
-			r.RequestLine = *reqLine
-			r.State = StateParsingHeaders
-			return n, nil
-	case StateParsingHeaders:
-			//log.Printf("the data just before parsing headers: %s", data)
-			n, done, err := r.Headers.Parse(data)
-			//log.Printf("the headers are: %v", r.Headers)
-			if err != nil {
-				return 0, err
-			}
-			if done {
-				r.State = StateDone
-				return n, nil
-			} 
-			
-			return n, nil
-	case StateDone:
-			return 0, fmt.Errorf("trying to parse in done state")
-	default:
-			return 0, fmt.Errorf("unknown state")
+	case StateInit:
+		reqLine, n, err := parseRequestLine(data)
+		if err != nil {
+			return 0, err
 		}
+		if n == 0 {
+			return 0, nil
+		}
+		r.RequestLine = *reqLine
+		r.State = StateParsingHeaders
+		return n, nil
+	case StateParsingHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		if done {
+			r.State = StateParsingBody
+			return n, nil
+		}
+
+		return n, nil
+	case StateParsingBody:
+		//log.Printf("data before going to the body: '%s'", data)
+		val, exists := r.Headers.Get("content-length")
+		//log.Printf("value: '%s'", val)
+		if !exists {
+			if len(data) > 0 {
+				return 0, fmt.Errorf("error content-length does not exist but body exists")
+			}
+			r.State = StateDone
+			return 0, nil
+		}
+		valInInteger, err := strconv.Atoi(val)
+		//log.Printf("value in integer: %v", valInInteger)
+		if err != nil {
+			return 0, fmt.Errorf("error getting content-length")
+		}
+		//log.Printf("data: '%s'", data)
+		if valInInteger == 0 {
+			r.State = StateDone
+			return 0, nil
+		}
+		//log.Printf("r.Body is: '%s'", r.Body)
+		if len(r.Body) > valInInteger {
+			return 0, fmt.Errorf("body length greater than content-length")
+		}
+		if len(r.Body) == valInInteger {
+			r.State = StateDone
+			return len(data), nil
+		}
+		r.Body = append(r.Body, data...)
+		return len(data), nil
+	case StateDone:
+		return 0, fmt.Errorf("trying to parse in done state")
+	default:
+		return 0, fmt.Errorf("unknown state")
+	}
 }
 
 func parseRequestLine(data []byte) (*RequestLine, int, error) {
@@ -140,19 +176,19 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 	if indx == -1 {
 		return nil, 0, nil
 	}
-	
+
 	reqLine, err := requestLineParsing(data[:indx])
-		if err != nil {
-			return nil, 0, err
-		}
+	if err != nil {
+		return nil, 0, err
+	}
 	return reqLine, indx + len(crlf), nil
 
 }
 
 func requestLineParsing(data []byte) (*RequestLine, error) {
-	
+
 	httpParts := strings.Split(string(data), " ")
-	
+
 	//checking for valid no of parts
 	if len(httpParts) != 3 {
 		return nil, fmt.Errorf("invalid no of request line parts")
