@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"www.github.com/isaac-albert/httpfromtcp/internal/headers"
 )
 
 const crlf = "\r\n"
@@ -15,10 +17,12 @@ type RequstState int
 
 const (
 	StateInit RequstState = iota
+	StateParsingHeaders
 	StateDone
 )
 type Request struct {
 	RequestLine RequestLine
+	Headers headers.Headers
 	State RequstState
 }
 
@@ -31,6 +35,7 @@ type RequestLine struct {
 func NewRequest() *Request {
 	return &Request{
 		State: StateInit,
+		Headers: headers.NewHeaders(),
 	}
 }
 
@@ -45,30 +50,33 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	index := 0
 
 	for !req.isDone() {
-		if len(p) >= cap(p) {
+		if index >= len(p) {
 			tmpBuf := make([]byte, 2*len(p))
-			n := copy(tmpBuf, p)
-			p = tmpBuf[:n]
+			copy(tmpBuf, p)
+			p = tmpBuf
 		}
+		//log.Printf("infinite loop starts here: %v", 59)
 		bytesRead, err := reader.Read(p[index:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				req.State = StateDone
+				if req.State != StateDone {
+					return nil, fmt.Errorf("incomplete request, in state: %d, read n bytes on EOF: %d", req.State, bytesRead)
+				}
 				break
 			}
 			return nil, fmt.Errorf("error reading from connection")
 		}
+		//log.Printf("infinite loop starts here: %v", 70)
 		index += bytesRead
 		bytesParsed, err := req.parse(p[:index])
 		if err != nil {
 			return nil, err
 		}
+		//log.Printf("infinite loop starts here: %v", 76)
 		
-		tmpBuf := make([]byte, cap(p))
-		copy(tmpBuf, p[bytesParsed:])
-		p = tmpBuf
-
+		copy(p, p[bytesParsed:])
 		index -= bytesParsed
+		//log.Printf("infinite loop starts here: %v", 80)
 
 	}
 
@@ -76,37 +84,68 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	switch r.State {
-	case StateInit: 
-		n, err := r.parseRequestLine(data)
+	totalBytesParsed := 0
+
+	for !r.isDone() {
+		//log.Printf("before data[totalBytesParsed:] is: %s", data[totalBytesParsed:])
+		//log.Printf("infinite loop starts here: %v", 92)
+		n, err := r.parseSingle(data[totalBytesParsed:])
 		if err != nil {
 			return 0, err
 		}
+		totalBytesParsed += n
 		if n == 0 {
-			return 0, nil
+			//log.Printf("infinite loop starts here: %v", 99)
+			break
 		}
-		
-		r.State = StateDone
-		return n, nil
-	case StateDone:
-		return 0, fmt.Errorf("trying to parse in done state")
-	default:
-		return 0, fmt.Errorf("unknown state")
 	}
+	return totalBytesParsed, nil
 }
 
-func (r *Request) parseRequestLine(data []byte) (int, error) {
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.State {
+	case StateInit: 
+			reqLine, n, err := parseRequestLine(data)
+			if err != nil {
+				return 0, err
+			}
+			if n == 0 {
+				return 0, nil
+			}
+			r.RequestLine = *reqLine
+			r.State = StateParsingHeaders
+			return n, nil
+	case StateParsingHeaders:
+			//log.Printf("the data just before parsing headers: %s", data)
+			n, done, err := r.Headers.Parse(data)
+			//log.Printf("the headers are: %v", r.Headers)
+			if err != nil {
+				return 0, err
+			}
+			if done {
+				r.State = StateDone
+				return n, nil
+			} 
+			
+			return n, nil
+	case StateDone:
+			return 0, fmt.Errorf("trying to parse in done state")
+	default:
+			return 0, fmt.Errorf("unknown state")
+		}
+}
+
+func parseRequestLine(data []byte) (*RequestLine, int, error) {
 	indx := bytes.Index(data, []byte(crlf))
 	if indx == -1 {
-		return 0, nil
+		return nil, 0, nil
 	}
 	
 	reqLine, err := requestLineParsing(data[:indx])
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
-		r.RequestLine = *reqLine
-	return indx + len(crlf), nil
+	return reqLine, indx + len(crlf), nil
 
 }
 
