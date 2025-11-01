@@ -29,68 +29,65 @@ func main() {
 
 func handle(w *response.Writer, r *request.Request) {
 	switch r.RequestLine.RequestTarget {
-	case "/":
-		msg := []byte("Your request was an absolute banger.")
-		hdrs := response.GetDefaultHeaders(len(msg))
-		hdrs.ForceSet("Content-Type", "text/html")
-		status := response.StatusOK
-		// title := fmt.Sprintf("%v %s", status, response.ReasonPhrase(status))
-		// heading := response.GetHeading(status)
-		w.WriteStatusLine(status)
-		w.WriteHeaders(hdrs)
-		// 		data := []byte(fmt.Sprintf(`
-		// 		<html>
-		//   <head>
-		//     <title>%s</title>
-		//   </head>
-		//   <body>
-		//     <h1>%s</h1>
-		//     <p>%s</p>
-		//   </body>
-		// </html>
-		// 		`, title, heading, string(msg)))
-		w.WriteBody(msg)
 	case "/yourproblem":
-		msg := []byte("Your request honestly kinda sucked.")
-		hdrs := response.GetDefaultHeaders(len(msg))
-		hdrs.ForceSet("Content-Type", "text/html")
-		status := response.StatusBadRequest
-		// title := fmt.Sprintf("%v %s", status, response.ReasonPhrase(status))
-		// heading := response.GetHeading(status)
-		w.WriteStatusLine(status)
-		w.WriteHeaders(hdrs)
-		// 		data := []byte(fmt.Sprintf(`
-		// 		<html>
-		//   <head>
-		//     <title>%s</title>
-		//   </head>
-		//   <body>
-		//     <h1>%s</h1>
-		//     <p>%s</p>
-		//   </body>
-		// </html>
-		// 		`, title, heading, string(msg)))
-		w.WriteBody(msg)
+		handlerFunc(w, r, response.StatusBadRequest)
+		return
 	case "/myproblem":
-		msg := []byte("Okay, you know what? This one is on me.")
+		handlerFunc(w, r, response.StatusInternalServerError)
+		return
+	default:
+		handlerFunc(w, r, response.StatusOK)
+		return
+	}
+}
+
+func handlerFunc(w *response.Writer, req *request.Request, statusCode response.StatusCode) {
+		msg := getHTMLBody(req)
 		hdrs := response.GetDefaultHeaders(len(msg))
 		hdrs.ForceSet("Content-Type", "text/html")
-		status := response.StatusInternalServerError
-		// title := fmt.Sprintf("%v %s", status, response.ReasonPhrase(status))
-		// heading := response.GetHeading(status)
-		w.WriteStatusLine(status)
+		w.WriteStatusLine(statusCode)
 		w.WriteHeaders(hdrs)
-		// 		data := []byte(fmt.Sprintf(`
-		// 		<html>
-		//   <head>
-		//     <title>%s</title>
-		//   </head>
-		//   <body>
-		//     <h1>%s</h1>
-		//     <p>%s</p>
-		//   </body>
-		// </html>
-		// 		`, title, heading, string(msg)))
 		w.WriteBody(msg)
+}
+
+func getHTMLBody(r *request.Request) []byte {
+	switch r.RequestLine.RequestTarget {
+	case "/yourproblem":
+		return []byte(`
+		<html>
+  <head>
+    <title>400 Bad Request</title>
+  </head>
+  <body>
+    <h1>Bad Request</h1>
+    <p>Your request honestly kinda sucked.</p>
+  </body>
+</html>
+		`)
+	case "/myproblem":
+		return []byte(`
+		<html>
+  <head>
+    <title>500 Internal Server Error</title>
+  </head>
+  <body>
+    <h1>Internal Server Error</h1>
+    <p>Okay, you know what? This one is on me.</p>
+  </body>
+</html>
+		`)
+	default:
+		return []byte(`
+		<html>
+  <head>
+    <title>200 OK</title>
+  </head>
+  <body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+  </body>
+</html>
+		`)
+
 	}
 }
