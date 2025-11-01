@@ -29,29 +29,36 @@ const (
 
 type Writer struct {
 	writer      io.Writer
-	writerState WriterState
+	WriterState WriterState
 }
 
 func NewWriter(c net.Conn) *Writer {
 	return &Writer{
 		writer:      c,
-		writerState: StateWritingStatusLine,
+		WriterState: StateWritingStatusLine,
 	}
 }
 
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
+
+	if w.WriterState != StateWritingStatusLine {
+		return fmt.Errorf("error writing status line while not in State Writing Status Line")
+	}
 
 	reasonPhrase := ReasonPhrase(statusCode)
 
 	reasonPhraseBytes := []byte(fmt.Sprintf("HTTP/1.1 %v %s\r\n", statusCode, reasonPhrase))
 
 	_, err := w.writer.Write(reasonPhraseBytes)
-	w.writerState = StateWritingHeaders
+	w.WriterState = StateWritingHeaders
 	return err
 
 }
 
 func (w *Writer) WriteHeaders(headers headers.Headers) error {
+	if w.WriterState != StateWritingHeaders {
+		return fmt.Errorf("error writing status line while not in State Writing Headers")
+	}
 
 	for key, value := range headers {
 		_, err := w.writer.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value)))
@@ -61,13 +68,19 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	}
 
 	_, err := w.writer.Write([]byte("\r\n"))
-	w.writerState = StateWritingBody
+	w.WriterState = StateWritingBody
 	return err
 }
 
 func (w *Writer) WriteBody(data []byte) (int, error) {
 
+	if w.WriterState != StateWritingBody {
+		return 0,  fmt.Errorf("error writing status line while not in State Writing Status Line")
+	}
+
 	n, err := w.writer.Write(data)
+
+	w.WriterState = StateDone
 	return n, err
 }
 

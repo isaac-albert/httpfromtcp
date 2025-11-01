@@ -95,6 +95,15 @@ func (s *Server) handle(conn net.Conn) {
 	}
 
 	s.handler(writer, req)
+
+	if writer.WriterState != response.StateDone {
+		hErr := HandlerError{
+			StatusCode: response.StatusInternalServerError,
+			Message:    "error writer is not done writing and exited the handler function",
+		}
+		hErr.Write(writer)
+		return
+	}
 }
 
 func (s *Server) Close() error {
