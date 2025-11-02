@@ -12,6 +12,8 @@ import (
 	"www.github.com/isaac-albert/httpfromtcp/internal/response"
 )
 
+
+
 type Handler func(w *response.Writer, req *request.Request)
 
 type HandlerError struct {
@@ -19,15 +21,15 @@ type HandlerError struct {
 	Message    string
 }
 
-func (h *HandlerError) Write(w *response.Writer) {
+// func (h *HandlerError) Write(w *response.Writer) {
 
-	msg := []byte(h.Message)
+// 	msg := []byte(h.Message)
 
-	w.WriteStatusLine(h.StatusCode)
-	hdrs := response.GetDefaultHeaders(len(msg))
-	w.WriteHeaders(hdrs)
-	w.WriteBody(msg)
-}
+// 	w.WriteStatusLine(h.StatusCode)
+// 	hdrs := response.GetDefaultHeaders(len(msg))
+// 	w.WriteHeaders(hdrs)
+// 	w.WriteBody(msg)
+// }
 
 type Server struct {
 	Listener net.Listener
@@ -79,31 +81,23 @@ func (s *Server) Listen() {
 	}
 }
 
+
+
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 
-	writer := response.NewWriter(conn)
+	w := response.NewWriter(conn)
 
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		hErr := HandlerError{
-			StatusCode: response.StatusBadRequest,
-			Message:    err.Error(),
-		}
-		hErr.Write(writer)
+		log.Printf("code is not able to parse from request")
+		w.WriteStatusLine(response.StatusBadRequest)
+		body := []byte(fmt.Sprintf("Error parsing request: %v", err))
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 		return
 	}
-
-	s.handler(writer, req)
-
-	if writer.WriterState != response.StateDone {
-		hErr := HandlerError{
-			StatusCode: response.StatusInternalServerError,
-			Message:    "error writer is not done writing and exited the handler function",
-		}
-		hErr.Write(writer)
-		return
-	}
+	s.handler(w, req)
 }
 
 func (s *Server) Close() error {

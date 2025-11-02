@@ -217,9 +217,7 @@ func TestBodyRequest(t *testing.T) {
 
 	//Test: valid empty body with NO content-length
 	reader = &chunkReader{
-		data: "POST /submit HTTP/1.1\r\n" +
-			"Host: localhost:42069\r\n" +
-			"\r\n",
+		data: "GET /httpbin/stream/100 HTTP/1.1\r\nHost: localhost:42069\r\nConnection: close\r\n\r\n",
 		numBytesPerRead: 3,
 	}
 	r, err = RequestFromReader(reader)
@@ -237,5 +235,4 @@ func TestBodyRequest(t *testing.T) {
 	}
 	_, err = RequestFromReader(reader)
 	require.Error(t, err)
-	
 }

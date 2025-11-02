@@ -138,8 +138,9 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 		val, exists := r.Headers.Get("content-length")
 		//log.Printf("value: '%s'", val)
 		if !exists {
-			if len(data) > 0 {
-				return 0, fmt.Errorf("error content-length does not exist but body exists")
+			if len(data) != 0 {
+				//
+				return 0, fmt.Errorf("data to be parsed: '%s' and content-legnth header: '%v'", data, r.Headers["content-length"])
 			}
 			r.State = StateDone
 			return 0, nil

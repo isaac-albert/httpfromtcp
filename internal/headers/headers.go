@@ -77,6 +77,24 @@ func (h Headers) Set(key, val string) {
 
 }
 
+func (h Headers) SetWithoutLower(key, value string) {
+	v, ok := h[key]
+	if ok {
+		value = strings.Join([]string{
+			v,
+			value,
+		}, ", ")
+	}
+	h[key] = value
+}
+
+func (h Headers) ForceRemoveHeader(key string) {
+	key = strings.ToLower(key)
+
+	delete(h, key)
+}
+
+
 func (h Headers) Get(key string) (string, bool) {
 	key = strings.ToLower(key)
 	val, ok := h[key]
