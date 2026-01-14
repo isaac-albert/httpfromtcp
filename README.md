@@ -83,12 +83,12 @@ Key learning areas include:
 │   └── headers/           # Case-insensitive header handling and validation
 ```
 
-## Getting Started
+# Getting Started
 
-# Prerequisites
+## Prerequisites
 - Go 1.20 or later (recommended)
 
-# Run the HTTP Server
+## Run the HTTP Server
 - Start the server on port ```42069```:
 ```
 go run cmd/httpserver/main.go
